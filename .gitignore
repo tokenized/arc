@@ -1,0 +1,10 @@
+
+*.exe
+*.test
+*.prof
+*.log
+tmp*
+dist
+setup.txt
+*.json
+*.txt
