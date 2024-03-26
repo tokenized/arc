@@ -17,6 +17,7 @@ import (
 	"github.com/tokenized/channels/peer_channels_listener"
 	"github.com/tokenized/config"
 	"github.com/tokenized/logger"
+	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/expanded_tx"
 	"github.com/tokenized/pkg/peer_channels"
 	"github.com/tokenized/threads"
@@ -63,11 +64,46 @@ func main() {
 		if err := Submit(ctx, cfg, os.Args[2:]); err != nil {
 			logger.Error(ctx, "Failed to submit tx : %s", err)
 		}
+	case "status":
+		if err := Status(ctx, cfg, os.Args[2:]); err != nil {
+			logger.Error(ctx, "Failed to check status of tx : %s", err)
+		}
 	case "listen":
 		if err := Listen(ctx, cfg, os.Args[2:]); err != nil {
 			logger.Error(ctx, "Failed to listen : %s", err)
 		}
 	}
+}
+
+func Status(ctx context.Context, cfg *Config, args []string) error {
+	if len(args) != 1 {
+		logger.Fatal(ctx, "Wrong argument count: submit [txid]")
+	}
+
+	txid, err := bitcoin.NewHash32FromStr(args[0])
+	if err != nil {
+		return errors.Wrap(err, "txid")
+	}
+
+	factory := arc.NewFactory(cfg.Factory)
+	for _, service := range cfg.Services {
+		client, err := factory.NewClient(service.URL, service.AuthToken,
+			service.CallBackPeerChannel.String())
+		if err != nil {
+			return errors.Wrapf(err, "new client: %s", service.URL)
+		}
+
+		fmt.Printf("Status request sent %s\n", time.Now().UTC())
+		response, err := client.GetTxStatus(ctx, *txid)
+		if err != nil {
+			return errors.Wrapf(err, "submit tx: %s", service.URL)
+		}
+
+		js, _ := json.MarshalIndent(response, "", "  ")
+		fmt.Printf("Status response: %s\n%s\n", service.URL, js)
+	}
+
+	return nil
 }
 
 func Submit(ctx context.Context, cfg *Config, args []string) error {
@@ -105,7 +141,7 @@ func Submit(ctx context.Context, cfg *Config, args []string) error {
 			return errors.Wrapf(err, "new client: %s", service.URL)
 		}
 
-		fmt.Printf("Sent %s\n", time.Now())
+		fmt.Printf("Submit request sent %s\n", time.Now().UTC())
 		response, err := client.SubmitTxsBytes(ctx, b)
 		if err != nil {
 			return errors.Wrapf(err, "submit tx: %s", service.URL)
@@ -166,6 +202,7 @@ type callBackHandler struct {
 func (h callBackHandler) displayCallBack(ctx context.Context, msg peer_channels.Message) error {
 	ctx = logger.ContextWithLogTrace(ctx, uuid.New().String())
 
+	fmt.Printf("Message deliverd : %s\n", time.Now().UTC())
 	fmt.Printf("Received : %s\n", msg.Received)
 	fmt.Printf("Sequence : %d\n", msg.Sequence)
 	fmt.Printf("ChannelID : %s\n", msg.ChannelID)
