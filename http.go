@@ -32,6 +32,21 @@ const (
 	HeaderKeyWaitForStatus     = "X-WaitForStatus"
 )
 
+var (
+	httpStatusDescriptions = map[int]string{
+		http.StatusBadRequest:          "bad request",
+		http.StatusUnauthorized:        "unauthorized",
+		http.StatusConflict:            "generic",
+		http.StatusUnprocessableEntity: "malformed request",
+		460:                            "not extended format",
+		461:                            "malformed transaction",
+		462:                            "invalid inputs",
+		463:                            "malformed transaction",
+		464:                            "invalid outputs",
+		465:                            "fee too low",
+	}
+)
+
 type HTTPClient struct {
 	url         atomic.Value
 	authToken   atomic.Value
@@ -41,16 +56,38 @@ type HTTPClient struct {
 }
 
 type HTTPError struct {
-	Status  int
-	Message string
+	Status      int
+	Message     string
+	Description string
 }
 
 func (err HTTPError) Error() string {
-	if len(err.Message) > 0 {
-		return fmt.Sprintf("HTTP Status %d : %s", err.Status, err.Message)
+	result := fmt.Sprintf("HTTP Status %d", err.Status)
+
+	if len(err.Description) > 0 {
+		result = fmt.Sprintf("%s : %s", result, err.Description)
 	}
 
-	return fmt.Sprintf("HTTP Status %d", err.Status)
+	if len(err.Message) > 0 {
+		result = fmt.Sprintf("%s : %s", result, err.Message)
+	}
+
+	return result
+}
+
+// Returns true if this error represents an error caused by a tx being invalid.
+func IsInvalidTxError(err error) bool {
+	httpError, ok := err.(HTTPError)
+	if !ok {
+		return false
+	}
+
+	switch httpError.Status {
+	case 461, 462, 463, 464, 465:
+		return true
+	default:
+		return false
+	}
 }
 
 func NewHTTPClient(url, authToken, callBackURL string, config Config) *HTTPClient {
@@ -112,18 +149,6 @@ func (c HTTPClient) GetTxStatus(ctx context.Context,
 		return response, nil
 	}
 
-	httpError, ok := err.(HTTPError)
-	if !ok {
-		return nil, errors.Wrap(err, "get")
-	}
-
-	switch httpError.Status {
-	case http.StatusUnauthorized: // Security Requirements Failed
-	case http.StatusNotFound: // Not Found
-	case http.StatusConflict: // Generic Error
-
-	}
-
 	return nil, errors.Wrap(err, "get")
 }
 
@@ -166,24 +191,6 @@ func (c HTTPClient) SubmitTxBytes(ctx context.Context, txBytes []byte) (*TxSubmi
 		return response, nil
 	}
 
-	httpError, ok := err.(HTTPError)
-	if !ok {
-		return nil, errors.Wrap(err, "post")
-	}
-
-	switch httpError.Status {
-	case http.StatusBadRequest:
-	case http.StatusUnauthorized: // Security Requirements Failed
-	case http.StatusConflict: // Generic Error
-	case http.StatusUnprocessableEntity: // Malformed request
-	case 460: // Not extended format
-	case 461: // Malformed transaction
-	case 462: // Invalid inputs
-	case 463: // Malformed transaction
-	case 464: // Invalid outputs
-	case 465: // Fee too low
-	}
-
 	return nil, errors.Wrap(err, "post")
 }
 
@@ -203,17 +210,13 @@ func (c HTTPClient) SubmitTxs(ctx context.Context,
 func (c HTTPClient) SubmitTxsBytes(ctx context.Context,
 	txsBytes []byte) ([]*TxSubmitResponse, error) {
 
-	println("url", c.url.Load().(string))
 	header := make(http.Header)
 	if callBackURL := c.callBackURL.Load().(string); len(callBackURL) > 0 {
 		peerChannel, err := peer_channels.ParseChannel(callBackURL)
 		if err == nil && len(peerChannel.Token) > 0 {
-			println("call back url", peerChannel.MaskedString())
 			header.Add(HeaderKeyCallbackURL, peerChannel.MaskedString())
-			println("call back token", peerChannel.Token)
 			header.Add(HeaderKeyCallbackToken, peerChannel.Token)
 		} else {
-			println("call back url", callBackURL)
 			header.Add(HeaderKeyCallbackURL, callBackURL)
 		}
 		header.Add(HeaderKeyFullStatusUpdates, "true")
@@ -273,6 +276,10 @@ func (c HTTPClient) get(url string, header http.Header, response interface{}) er
 			return errors.Wrap(ErrTimeout, errors.Wrap(result, "http post").Error())
 		}
 
+		if description, exists := httpStatusDescriptions[httpResponse.StatusCode]; exists {
+			result.Description = description
+		}
+
 		return result
 	}
 
@@ -281,7 +288,6 @@ func (c HTTPClient) get(url string, header http.Header, response interface{}) er
 	if response != nil {
 		b, rerr := ioutil.ReadAll(httpResponse.Body)
 		if rerr == nil {
-			println("response body", string(b))
 			if err := json.Unmarshal(b, response); err != nil {
 				return errors.Wrap(err, "unmarshal json")
 			}
@@ -332,9 +338,6 @@ func (c HTTPClient) post(url string, header http.Header, request, response inter
 		}
 	}
 
-	println("url", url)
-	println("header", fmt.Sprintf("%v", httpRequest.Header))
-
 	httpResponse, err := c.httpClient.Do(httpRequest)
 	if err != nil {
 		if errors.Cause(err) == context.DeadlineExceeded {
@@ -357,6 +360,10 @@ func (c HTTPClient) post(url string, header http.Header, request, response inter
 			return errors.Wrap(ErrTimeout, errors.Wrap(result, "http post").Error())
 		}
 
+		if description, exists := httpStatusDescriptions[httpResponse.StatusCode]; exists {
+			result.Description = description
+		}
+
 		return result
 	}
 
@@ -365,7 +372,6 @@ func (c HTTPClient) post(url string, header http.Header, request, response inter
 	if response != nil {
 		b, rerr := ioutil.ReadAll(httpResponse.Body)
 		if rerr == nil {
-			println("response body", string(b))
 			if err := json.Unmarshal(b, response); err != nil {
 				return errors.Wrap(err, "unmarshal json")
 			}

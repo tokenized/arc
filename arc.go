@@ -148,6 +148,42 @@ type Callback struct {
 	TxStatus    *TxStatus       `json:"txStatus,omitempty"`
 }
 
+func (r TxStatusResponse) Description() string {
+	if r.ExtraInfo == nil {
+		return *r.ExtraInfo
+	}
+
+	return ""
+}
+
+func (r TxSubmitResponse) Description() string {
+	if len(r.Title) > 0 {
+		return r.Title
+	}
+
+	if r.ExtraInfo == nil {
+		return *r.ExtraInfo
+	}
+
+	return ""
+}
+
+func (c Callback) Description() string {
+	if len(c.Title) > 0 {
+		return c.Title
+	}
+
+	if len(c.Detail) > 0 {
+		return c.Detail
+	}
+
+	if c.ExtraInfo == nil {
+		return *c.ExtraInfo
+	}
+
+	return ""
+}
+
 func (s TxStatus) String() string {
 	switch s {
 	case TxStatusUnknown:
