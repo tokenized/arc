@@ -9,12 +9,13 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"path"
+	"net/url"
 	"sync/atomic"
 
 	"github.com/tokenized/arc/pkg/tef"
 	"github.com/tokenized/pkg/bitcoin"
 	"github.com/tokenized/pkg/expanded_tx"
+	"github.com/tokenized/pkg/peer_channels"
 
 	"github.com/pkg/errors"
 )
@@ -26,6 +27,7 @@ const (
 	PathSubmitTxs = "v1/txs"
 
 	HeaderKeyCallbackURL       = "X-CallbackUrl"
+	HeaderKeyCallbackToken     = "X-CallbackToken"
 	HeaderKeyFullStatusUpdates = "X-FullStatusUpdates"
 	HeaderKeyWaitForStatus     = "X-WaitForStatus"
 )
@@ -83,7 +85,11 @@ func (c HTTPClient) GetPolicy(ctx context.Context) (*Policy, error) {
 		header.Add("Authorization", authToken)
 	}
 
-	path := path.Join(c.url.Load().(string), PathPolicy)
+	path, err := url.JoinPath(c.url.Load().(string), PathPolicy)
+	if err != nil {
+		return nil, errors.Wrap(err, "join path")
+	}
+
 	policy := &Policy{}
 	if err := c.get(path, header, policy); err != nil {
 		return nil, errors.Wrap(err, "get")
@@ -96,10 +102,13 @@ func (c HTTPClient) GetTxStatus(ctx context.Context,
 	txid bitcoin.Hash32) (*TxStatusResponse, error) {
 
 	header := make(http.Header)
-	path := path.Join(c.url.Load().(string), fmt.Sprintf(PathTxStatus, txid))
+	path, err := url.JoinPath(c.url.Load().(string), fmt.Sprintf(PathTxStatus, txid))
+	if err != nil {
+		return nil, errors.Wrap(err, "join path")
+	}
+
 	response := &TxStatusResponse{}
-	err := c.get(path, header, response)
-	if err == nil {
+	if err := c.get(path, header, response); err == nil {
 		return response, nil
 	}
 
@@ -132,7 +141,13 @@ func (c HTTPClient) SubmitTx(ctx context.Context,
 func (c HTTPClient) SubmitTxBytes(ctx context.Context, txBytes []byte) (*TxSubmitResponse, error) {
 	header := make(http.Header)
 	if callBackURL := c.callBackURL.Load().(string); len(callBackURL) > 0 {
-		header.Add(HeaderKeyCallbackURL, callBackURL)
+		peerChannel, err := peer_channels.ParseChannel(callBackURL)
+		if err == nil && len(peerChannel.Token) > 0 {
+			header.Add(HeaderKeyCallbackURL, peerChannel.MaskedString())
+			header.Add(HeaderKeyCallbackToken, peerChannel.Token)
+		} else {
+			header.Add(HeaderKeyCallbackURL, callBackURL)
+		}
 		header.Add(HeaderKeyFullStatusUpdates, "true")
 
 		// When using callbacks don't wait for status beyond received to get response.
@@ -141,10 +156,13 @@ func (c HTTPClient) SubmitTxBytes(ctx context.Context, txBytes []byte) (*TxSubmi
 
 	header.Set("Content-Type", "application/octet-stream")
 
-	path := path.Join(c.url.Load().(string), PathSubmitTx)
+	path, err := url.JoinPath(c.url.Load().(string), PathSubmitTx)
+	if err != nil {
+		return nil, errors.Wrap(err, "join path")
+	}
+
 	response := &TxSubmitResponse{}
-	err := c.post(path, header, txBytes, response)
-	if err == nil {
+	if err := c.post(path, header, txBytes, response); err == nil {
 		return response, nil
 	}
 
@@ -185,16 +203,30 @@ func (c HTTPClient) SubmitTxs(ctx context.Context,
 func (c HTTPClient) SubmitTxsBytes(ctx context.Context,
 	txsBytes []byte) ([]*TxSubmitResponse, error) {
 
+	println("url", c.url.Load().(string))
 	header := make(http.Header)
 	if callBackURL := c.callBackURL.Load().(string); len(callBackURL) > 0 {
-		header.Add(HeaderKeyCallbackURL, callBackURL)
+		peerChannel, err := peer_channels.ParseChannel(callBackURL)
+		if err == nil && len(peerChannel.Token) > 0 {
+			println("call back url", peerChannel.MaskedString())
+			header.Add(HeaderKeyCallbackURL, peerChannel.MaskedString())
+			println("call back token", peerChannel.Token)
+			header.Add(HeaderKeyCallbackToken, peerChannel.Token)
+		} else {
+			println("call back url", callBackURL)
+			header.Add(HeaderKeyCallbackURL, callBackURL)
+		}
 		header.Add(HeaderKeyFullStatusUpdates, "true")
 
 		// When using callbacks don't wait for status beyond received to get response.
 		header.Add(HeaderKeyWaitForStatus, fmt.Sprintf("%d", int(TxStatusReceived)))
 	}
 
-	path := path.Join(c.url.Load().(string), PathSubmitTxs)
+	path, err := url.JoinPath(c.url.Load().(string), PathSubmitTxs)
+	if err != nil {
+		return nil, errors.Wrap(err, "join path")
+	}
+
 	var response []*TxSubmitResponse
 	if err := c.post(path, header, txsBytes, &response); err != nil {
 		return nil, errors.Wrap(err, "post")
@@ -213,7 +245,11 @@ func (c HTTPClient) get(url string, header http.Header, response interface{}) er
 		header.Add("Authorization", authToken)
 	}
 
-	httpRequest.Header = header
+	for key, values := range header {
+		for _, value := range values {
+			httpRequest.Header.Add(key, value)
+		}
+	}
 
 	httpResponse, err := c.httpClient.Do(httpRequest)
 	if err != nil {
@@ -269,6 +305,7 @@ func (c HTTPClient) post(url string, header http.Header, request, response inter
 		case []byte:
 			// request is already a byte slice, not an object to convert to json
 			requestReader = bytes.NewReader(v)
+			header.Add("Content-Type", "application/octet-stream")
 		default:
 			buf := &bytes.Buffer{}
 			encoder := json.NewEncoder(buf)
@@ -276,6 +313,7 @@ func (c HTTPClient) post(url string, header http.Header, request, response inter
 				return errors.Wrap(err, "json marshal")
 			}
 			requestReader = buf
+			header.Add("Content-Type", "application/json")
 		}
 	}
 
@@ -288,7 +326,14 @@ func (c HTTPClient) post(url string, header http.Header, request, response inter
 		header.Add("Authorization", authToken)
 	}
 
-	httpRequest.Header = header
+	for key, values := range header {
+		for _, value := range values {
+			httpRequest.Header.Add(key, value)
+		}
+	}
+
+	println("url", url)
+	println("header", fmt.Sprintf("%v", httpRequest.Header))
 
 	httpResponse, err := c.httpClient.Do(httpRequest)
 	if err != nil {

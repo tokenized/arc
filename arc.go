@@ -50,6 +50,8 @@ const (
 
 	// TxStatusOrphaned - The transaction has been sent to at least 1 Bitcoin node but parent
 	// transaction was not found.
+	// This might be seen with txs that are chained too quickly, but should quickly be updated to
+	// "seen".
 	TxStatusOrphaned = TxStatus(10)
 
 	// TxStatusConfirmed - The transaction is marked as confirmed when it is in a block with 100

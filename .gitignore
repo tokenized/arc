@@ -8,3 +8,4 @@ dist
 setup.txt
 *.json
 *.txt
+*.env

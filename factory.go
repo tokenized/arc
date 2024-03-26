@@ -8,8 +8,8 @@ import (
 )
 
 type Config struct {
-	ConnectTimeout time.Duration
-	RequestTimeout time.Duration
+	ConnectTimeout time.Duration `defautl:"10s" json:"connection_timeout"`
+	RequestTimeout time.Duration `defautl:"30s" json:"request_timeout"`
 }
 
 func (c Config) Copy() Config {
