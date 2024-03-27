@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"net/url"
 	"sync/atomic"
 
 	"github.com/tokenized/arc/pkg/tef"
@@ -122,7 +121,7 @@ func (c HTTPClient) GetPolicy(ctx context.Context) (*Policy, error) {
 		header.Add("Authorization", authToken)
 	}
 
-	path, err := url.JoinPath(c.url.Load().(string), PathPolicy)
+	path, err := JoinPath(c.url.Load().(string), PathPolicy)
 	if err != nil {
 		return nil, errors.Wrap(err, "join path")
 	}
@@ -139,7 +138,7 @@ func (c HTTPClient) GetTxStatus(ctx context.Context,
 	txid bitcoin.Hash32) (*TxStatusResponse, error) {
 
 	header := make(http.Header)
-	path, err := url.JoinPath(c.url.Load().(string), fmt.Sprintf(PathTxStatus, txid))
+	path, err := JoinPath(c.url.Load().(string), fmt.Sprintf(PathTxStatus, txid))
 	if err != nil {
 		return nil, errors.Wrap(err, "join path")
 	}
@@ -181,7 +180,7 @@ func (c HTTPClient) SubmitTxBytes(ctx context.Context, txBytes []byte) (*TxSubmi
 
 	header.Set("Content-Type", "application/octet-stream")
 
-	path, err := url.JoinPath(c.url.Load().(string), PathSubmitTx)
+	path, err := JoinPath(c.url.Load().(string), PathSubmitTx)
 	if err != nil {
 		return nil, errors.Wrap(err, "join path")
 	}
@@ -225,7 +224,7 @@ func (c HTTPClient) SubmitTxsBytes(ctx context.Context,
 		header.Add(HeaderKeyWaitForStatus, fmt.Sprintf("%d", int(TxStatusReceived)))
 	}
 
-	path, err := url.JoinPath(c.url.Load().(string), PathSubmitTxs)
+	path, err := JoinPath(c.url.Load().(string), PathSubmitTxs)
 	if err != nil {
 		return nil, errors.Wrap(err, "join path")
 	}
@@ -383,4 +382,18 @@ func (c HTTPClient) post(url string, header http.Header, request, response inter
 	}
 
 	return nil
+}
+
+func JoinPath(p1, p2 string) (string, error) {
+	p1l := len(p1)
+	if p1l > 0 && p1[p1l-1] == '/' {
+		p1 = p1[:p1l-1]
+	}
+
+	p2l := len(p2)
+	if p2l > 0 && p2[0] == '/' {
+		p2 = p2[1:]
+	}
+
+	return fmt.Sprintf("%s/%s", p1, p2), nil
 }
