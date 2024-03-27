@@ -149,7 +149,7 @@ type Callback struct {
 }
 
 func (r TxStatusResponse) Description() string {
-	if r.ExtraInfo == nil {
+	if r.ExtraInfo != nil {
 		return *r.ExtraInfo
 	}
 
@@ -161,7 +161,7 @@ func (r TxSubmitResponse) Description() string {
 		return r.Title
 	}
 
-	if r.ExtraInfo == nil {
+	if r.ExtraInfo != nil {
 		return *r.ExtraInfo
 	}
 
@@ -177,7 +177,7 @@ func (c Callback) Description() string {
 		return c.Detail
 	}
 
-	if c.ExtraInfo == nil {
+	if c.ExtraInfo != nil {
 		return *c.ExtraInfo
 	}
 
