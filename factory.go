@@ -5,11 +5,12 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/tokenized/config"
 )
 
 type Config struct {
-	ConnectTimeout time.Duration `defautl:"10s" json:"connection_timeout"`
-	RequestTimeout time.Duration `defautl:"30s" json:"request_timeout"`
+	ConnectTimeout config.Duration `defautl:"10s" json:"connection_timeout"`
+	RequestTimeout config.Duration `defautl:"30s" json:"request_timeout"`
 }
 
 func (c Config) Copy() Config {
@@ -21,8 +22,8 @@ func (c Config) Copy() Config {
 
 func DefaultConfig() Config {
 	return Config{
-		ConnectTimeout: time.Second * 10,
-		RequestTimeout: time.Second * 30,
+		ConnectTimeout: config.NewDuration(time.Second * 10),
+		RequestTimeout: config.NewDuration(time.Second * 30),
 	}
 }
 

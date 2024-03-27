@@ -92,14 +92,14 @@ func IsInvalidTxError(err error) bool {
 func NewHTTPClient(url, authToken, callBackURL string, config Config) *HTTPClient {
 	transport := &http.Transport{
 		Dial: (&net.Dialer{
-			Timeout: config.ConnectTimeout,
+			Timeout: config.ConnectTimeout.Duration,
 		}).Dial,
-		TLSHandshakeTimeout: config.ConnectTimeout,
+		TLSHandshakeTimeout: config.ConnectTimeout.Duration,
 	}
 
 	result := &HTTPClient{
 		httpClient: &http.Client{
-			Timeout:   config.RequestTimeout,
+			Timeout:   config.RequestTimeout.Duration,
 			Transport: transport,
 		},
 	}
