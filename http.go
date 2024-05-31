@@ -144,11 +144,11 @@ func (c HTTPClient) GetTxStatus(ctx context.Context,
 	}
 
 	response := &TxStatusResponse{}
-	if err := c.get(path, header, response); err == nil {
-		return response, nil
+	if err := c.get(path, header, response); err != nil {
+		return nil, errors.Wrap(err, "get")
 	}
 
-	return nil, errors.Wrap(err, "get")
+	return response, nil
 }
 
 func (c HTTPClient) SubmitTx(ctx context.Context,
@@ -184,11 +184,11 @@ func (c HTTPClient) SubmitTxBytes(ctx context.Context, txBytes []byte) (*TxSubmi
 	}
 
 	response := &TxSubmitResponse{}
-	if err := c.post(path, header, txBytes, response); err == nil {
-		return response, nil
+	if err := c.post(path, header, txBytes, response); err != nil {
+		return nil, errors.Wrap(err, "post")
 	}
 
-	return nil, errors.Wrap(err, "post")
+	return response, nil
 }
 
 func (c HTTPClient) SubmitTxs(ctx context.Context,
