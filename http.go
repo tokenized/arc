@@ -167,18 +167,16 @@ func (c HTTPClient) SubmitTxBytes(ctx context.Context, txBytes []byte) (*TxSubmi
 	if callBackURL := c.callBackURL.Load().(string); len(callBackURL) > 0 {
 		peerChannel, err := peer_channels.ParseChannel(callBackURL)
 		if err == nil && len(peerChannel.Token) > 0 {
-			header.Add(HeaderKeyCallbackURL, peerChannel.MaskedString())
-			header.Add(HeaderKeyCallbackToken, peerChannel.Token)
+			header.Set(HeaderKeyCallbackURL, peerChannel.MaskedString())
+			header.Set(HeaderKeyCallbackToken, peerChannel.Token)
 		} else {
-			header.Add(HeaderKeyCallbackURL, callBackURL)
+			header.Set(HeaderKeyCallbackURL, callBackURL)
 		}
-		header.Add(HeaderKeyFullStatusUpdates, "true")
+		header.Set(HeaderKeyFullStatusUpdates, "true")
 
 		// When using callbacks don't wait for status beyond received to get response.
-		header.Add(HeaderKeyWaitForStatus, fmt.Sprintf("%d", int(TxStatusReceived)))
+		header.Set(HeaderKeyWaitForStatus, fmt.Sprintf("%d", int(TxStatusReceived)))
 	}
-
-	header.Set("Content-Type", "application/octet-stream")
 
 	path, err := JoinPath(c.url.Load().(string), PathSubmitTx)
 	if err != nil {
@@ -213,15 +211,15 @@ func (c HTTPClient) SubmitTxsBytes(ctx context.Context,
 	if callBackURL := c.callBackURL.Load().(string); len(callBackURL) > 0 {
 		peerChannel, err := peer_channels.ParseChannel(callBackURL)
 		if err == nil && len(peerChannel.Token) > 0 {
-			header.Add(HeaderKeyCallbackURL, peerChannel.MaskedString())
-			header.Add(HeaderKeyCallbackToken, peerChannel.Token)
+			header.Set(HeaderKeyCallbackURL, peerChannel.MaskedString())
+			header.Set(HeaderKeyCallbackToken, peerChannel.Token)
 		} else {
-			header.Add(HeaderKeyCallbackURL, callBackURL)
+			header.Set(HeaderKeyCallbackURL, callBackURL)
 		}
-		header.Add(HeaderKeyFullStatusUpdates, "true")
+		header.Set(HeaderKeyFullStatusUpdates, "true")
 
 		// When using callbacks don't wait for status beyond received to get response.
-		header.Add(HeaderKeyWaitForStatus, fmt.Sprintf("%d", int(TxStatusReceived)))
+		header.Set(HeaderKeyWaitForStatus, fmt.Sprintf("%d", int(TxStatusReceived)))
 	}
 
 	path, err := JoinPath(c.url.Load().(string), PathSubmitTxs)
@@ -244,7 +242,7 @@ func (c HTTPClient) get(url string, header http.Header, response interface{}) er
 	}
 
 	if authToken := c.authToken.Load().(string); len(authToken) > 0 {
-		header.Add("Authorization", authToken)
+		httpRequest.Header.Set("Authorization", authToken)
 	}
 
 	for key, values := range header {
@@ -307,10 +305,11 @@ func (c HTTPClient) post(url string, header http.Header, request, response inter
 		case string:
 			// request is already a json string, not an object to convert to json
 			requestReader = bytes.NewReader([]byte(v))
+			header.Set("Content-Type", "text/plain")
 		case []byte:
 			// request is already a byte slice, not an object to convert to json
 			requestReader = bytes.NewReader(v)
-			header.Add("Content-Type", "application/octet-stream")
+			header.Set("Content-Type", "application/octet-stream")
 		default:
 			buf := &bytes.Buffer{}
 			encoder := json.NewEncoder(buf)
@@ -318,17 +317,17 @@ func (c HTTPClient) post(url string, header http.Header, request, response inter
 				return errors.Wrap(err, "json marshal")
 			}
 			requestReader = buf
-			header.Add("Content-Type", "application/json")
+			header.Set("Content-Type", "application/json")
 		}
+	}
+
+	if authToken := c.authToken.Load().(string); len(authToken) > 0 {
+		header.Set("Authorization", authToken)
 	}
 
 	httpRequest, err := http.NewRequest(http.MethodPost, url, requestReader)
 	if err != nil {
 		return errors.Wrap(err, "create request")
-	}
-
-	if authToken := c.authToken.Load().(string); len(authToken) > 0 {
-		header.Add("Authorization", authToken)
 	}
 
 	for key, values := range header {

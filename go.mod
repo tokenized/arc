@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/google/uuid v1.3.0
 	github.com/pkg/errors v0.9.1
-	github.com/tokenized/channels v0.1.1
+	github.com/tokenized/channels v0.1.2-0.20240321200422-4527d5b6cda9
 	github.com/tokenized/config v0.2.2
 	github.com/tokenized/logger v0.1.3
 	github.com/tokenized/pkg v0.7.1-0.20240322160211-478383da3ef4
