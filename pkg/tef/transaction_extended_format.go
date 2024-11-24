@@ -44,6 +44,13 @@ func Serialize(w io.Writer, tx expanded_tx.TransactionWithOutputs) error {
 
 	for inputIndex := 0; inputIndex < inputCount; inputIndex++ {
 		input := tx.Input(inputIndex)
+
+		if input.PreviousOutPoint.Hash.IsZero() { // coinbase input
+			if err := SerializeExtendedInput(w, input, &wire.TxOut{}); err != nil {
+				return errors.Wrapf(err, "input %d", inputIndex)
+			}
+		}
+
 		inputOutput, err := tx.InputOutput(inputIndex)
 		if err != nil {
 			return errors.Wrapf(err, "input output %d", inputIndex)
